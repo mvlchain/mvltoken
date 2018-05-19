@@ -1,0 +1,48 @@
+version: 2
+general:
+  branches:
+    only:
+      - master
+jobs:
+  build:
+    working_directory: /app
+    docker:
+      - image: docker:18.03.1-ce-git
+    steps:
+      - checkout
+      - run:
+          name: 'Initialize Submodule'
+          command: |
+            git submodule sync && git submodule update --init
+      - setup_remote_docker
+      - run:
+          name: 'Update apk, install nodejs & yarn'
+          command: |
+            echo 'http://dl-cdn.alpinelinux.org/alpine/v3.7/main' >> /etc/apk/repositories
+            echo 'http://dl-cdn.alpinelinux.org/alpine/v3.7/community' >> /etc/apk/repositories
+            apk add --update nodejs=8.9.3-r1 nodejs-npm g++ gcc libgcc libstdc++ linux-headers make python
+            npm install node-gyp -g
+            npm install -g yarn
+            npm install -g truffle
+      - restore_cache: # node module cache
+          keys:
+            - v1-dependencies-{{ checksum "package.json" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+      - run:
+          name: Install dependencies
+          command: |
+            yarn install --frozen-lockfile --production=false
+      - run:
+          name: Load Docker image layer cache
+          command: |
+            set +o pipefail
+            docker load -i /caches/app.tar | true
+      - save_cache: # for node_modules
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+      # run test with coverage
+      - run: node_modules/.bin/solidity-coverage
+      # upload result
+      - run: cat coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js
