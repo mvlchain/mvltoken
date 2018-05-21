@@ -47,7 +47,8 @@ This is implemented [here](https://github.com/mvlchain/mvltoken/blob/master/cont
 
 ### Test Environment & status
 
-Build status [![CircleCI](https://circleci.com/gh/mvlchain/mvltoken/tree/master.svg?style=svg)](https://circleci.com/gh/mvlchain/mvltoken/tree/master)
+Build status [![CircleCI](https://circleci.com/gh/mvlchain/mvltoken/tree/master.svg?style=svg)](https://circleci.com/gh/mvlchain/mvltoken/tree/master)  
+Test & Coverage status [![Coverage Status](https://coveralls.io/repos/github/mvlchain/mvltoken/badge.svg?branch=master)](https://coveralls.io/github/mvlchain/mvltoken?branch=master)
 
 - Truffle on CircleCI
 - Every commit on master branch of this repository triggers [CircleCI](https://circleci.com/) hook.
