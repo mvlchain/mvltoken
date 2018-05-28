@@ -64,13 +64,13 @@ contract ERC20Token is BasicToken, ERC20 {
     return allowed[_owner][_spender];
   }
 
-  function increaseApproval(address _spender, uint256 _addedValue) external returns (bool success) {
+  function increaseApproval(address _spender, uint256 _addedValue) public returns (bool success) {
     allowed[msg.sender][_spender] = allowed[msg.sender][_spender].add(_addedValue);
     emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
     return true;
   }
 
-  function decreaseApproval(address _spender, uint256 _subtractedValue) external returns (bool success) {
+  function decreaseApproval(address _spender, uint256 _subtractedValue) public returns (bool success) {
     uint256 oldValue = allowed[msg.sender][_spender];
     if (_subtractedValue >= oldValue) {
       allowed[msg.sender][_spender] = 0;
@@ -112,7 +112,11 @@ contract TokenLock is Ownable {
   mapping(address => TokenLockState) lockingStates;
   event UpdateTokenLockState(address indexed to, uint256 start_time, uint256 step_time, uint256 unlock_step, uint256 value);
 
-  function enableTransfer(bool _enable) external onlyOwner {
+  function unlockAllTokens() public onlyOwner {
+    noTokenLocked = true;
+  }
+
+  function enableTransfer(bool _enable) public onlyOwner {
     transferEnabled = _enable;
   }
 
@@ -142,7 +146,7 @@ contract TokenLock is Ownable {
     return minTokens;
   }
 
-  function setTokenLockPolicy(address _addr, uint256 _value, uint256 _start_time, uint256 _step_time, uint256 _unlock_step) external onlyOwner {
+  function setTokenLockPolicy(address _addr, uint256 _value, uint256 _start_time, uint256 _step_time, uint256 _unlock_step) onlyOwnerOrAdmin public {
     require(_addr != address(0));
 
     TokenLockState storage lockState = lockingStates[_addr]; // assigns a pointer. change the member value will update struct itself.
@@ -159,7 +163,6 @@ contract TokenLock is Ownable {
 
 contract MVLToken is BurnableToken, DetailedERC20, ERC20Token, TokenLock {
   using SafeMath for uint256;
-  bool public noTokenLocked = false;
   uint256 public DISTRIBUTE_DATE = 1527768000; // 2018-05-31T21:00:00+09:00
 
   // events
@@ -176,10 +179,6 @@ contract MVLToken is BurnableToken, DetailedERC20, ERC20Token, TokenLock {
 
     // initial supply belongs to owner
     balances[owner] = _totalSupply;
-  }
-
-  function unlockAllTokens() external onlyOwner {
-    noTokenLocked = true;
   }
 
   // modifiers
@@ -200,6 +199,13 @@ contract MVLToken is BurnableToken, DetailedERC20, ERC20Token, TokenLock {
     _;
   }
 
+  function setAdmin(address newAdmin) onlyOwner public {
+    address oldAdmin = admin;
+    super.setAdmin(newAdmin);
+    approve(oldAdmin, 0);
+    approve(newAdmin, TOTAL_SUPPLY);
+  }
+
   modifier onlyValidDestination(address to) {
     require(to != address(0x0));
     require(to != address(this));
@@ -208,18 +214,13 @@ contract MVLToken is BurnableToken, DetailedERC20, ERC20Token, TokenLock {
   }
 
   function canTransferBefore(address _sender) public view returns(bool) {
-    return _sender == owner;
+    return _sender == owner || _sender == admin;
   }
 
   function canTransferIfLocked(address _sender, uint256 _value) public view returns(bool) {
     require(now >= DISTRIBUTE_DATE);
     uint256 after_math = balances[_sender].sub(_value);
     return after_math >= getMinLockedAmount(_sender);
-  }
-
-  // override from ERC20Token
-  function approve(address _spender, uint256 _value) public returns (bool) {
-    return super.approve(_spender, _value);
   }
 
   // override function using canTransfer on the sender address
