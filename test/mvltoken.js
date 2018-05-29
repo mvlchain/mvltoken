@@ -328,8 +328,9 @@ contract('MVLToken', (accounts) => {
       // await token.setTokenLockPolicy(beneficiary, lockAmount, startTime, stepTime, unlockStep, {from: accounts[0]});
       await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-07-01T00:00:00+00:00').unix());
       await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-07-31T00:00:00+00:00').unix());
-      await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-08-30T00:00:00+00:00').unix());
+      // add Sep's token lock ahead of Aug. For testing latestReleaseTime update
       await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-09-29T00:00:00+00:00').unix());
+      await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-08-30T00:00:00+00:00').unix());
 
       const locked = await token.getMinLockedAmount(beneficiary);
       locked.equals(web3.toBigNumber(100e18)).should.be.true;
@@ -339,8 +340,24 @@ contract('MVLToken', (accounts) => {
 
     });
 
+    it("unlocked account's lock should be 0 ", async () => {
+      const unlockedAccount = accounts[4];
+      const lockedAmount = await token.getMinLockedAmount(unlockedAccount);
+      lockedAmount.equals(web3.toBigNumber(0)).should.be.true; // amount should be 0
+    });
+
     it("cannot set the lock for 0 addr", async () => {
       await token.addTokenLock(0x0, 25, moment.parseZone('2018-07-01T00:00:00+00:00').unix(), {from: accounts[0]}).should.be.rejectedWith(Error);
+    });
+
+    it("cannot set the lock 0", async () => {
+      const account = accounts[4];
+      await token.addTokenLock(account, 0, moment.parseZone('2018-07-01T00:00:00+00:00').unix(), {from: accounts[0]}).should.be.rejectedWith(Error);
+    });
+
+    it("cannot set the past lock", async () => {
+      const account = accounts[4];
+      await token.addTokenLock(account, 1, moment.parseZone('2018-05-01T00:00:00+00:00').unix(), {from: accounts[0]}).should.be.rejectedWith(Error);
     });
 
     it("block set token lock policy for unauthorized user", async () => {
@@ -739,6 +756,12 @@ contract('MVLToken', (accounts) => {
     /***************/
     /* setup admin */
     /***************/
+    it("cannot setup admin with 0x0", async () => {
+      const admin = 0x0;
+      const owner = await token.owner();
+      await token.setAdmin(admin, {from: owner}).should.be.rejectedWith(Error);
+    });
+
     it("setup admin", async () => {
       const admin = accounts[9];
       const owner = await token.owner();
@@ -782,7 +805,6 @@ contract('MVLToken', (accounts) => {
       const from = await token.owner();
       await token.setAdmin(admin, {from}).should.be.rejectedWith(Error);
     });
-
   });
 
   describe("misc", () => {
@@ -849,6 +871,12 @@ contract('MVLToken', (accounts) => {
       // permission test
       await token.enableTransfer(false, {from: oldOwner}).should.be.rejectedWith(Error);
       await token.enableTransfer(true, {from: newOwner});
+    });
+
+    it("block change owner to admin", async () => {
+      const admin = await token.admin();
+      const owner = await token.owner();
+      await token.transferOwnership(admin, {from: owner}).should.be.rejectedWith(Error);
     });
 
     it("should check invalid address when xfer owner", async () => {

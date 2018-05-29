@@ -65,3 +65,5 @@ typings/
 
 .idea
 build/
+
+coverage.json
