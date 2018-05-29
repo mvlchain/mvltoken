@@ -102,15 +102,18 @@ contract TokenLock is Ownable {
   bool public transferEnabled = false; // indicates that token is transferable or not
   bool public noTokenLocked = false; // indicates all token is released or not
 
+  struct TokenLockInfo { // token of `amount` cannot be moved before `time`
+    uint256 amount; // locked amount
+    uint256 time; // unix timestamp
+  }
+
   struct TokenLockState {
-    uint256 unlockStart; // unix timestamp
-    uint256 step; // how many step required to final release
-    uint256 stepTime; // time in second hold in each step
-    uint256 amount; // how many token locked
+    uint256 latestReleaseTime;
+    TokenLockInfo[] tokenLocks; // multiple token locks can exist
   }
 
   mapping(address => TokenLockState) lockingStates;
-  event UpdateTokenLockState(address indexed to, uint256 start_time, uint256 step_time, uint256 unlock_step, uint256 value);
+  event AddTokenLock(address indexed to, uint256 time, uint256 amount);
 
   function unlockAllTokens() public onlyOwner {
     noTokenLocked = true;
@@ -122,42 +125,41 @@ contract TokenLock is Ownable {
 
   // calculate the amount of tokens an address can use
   function getMinLockedAmount(address _addr) view public returns (uint256) {
+    uint256 i;
+    uint256 a;
+    uint256 t;
+    uint256 lockSum = 0;
+
     // if the address has no limitations just return 0
     TokenLockState storage lockState = lockingStates[_addr];
-
-    if (lockState.amount == 0) {
+    if (lockState.latestReleaseTime < now) {
       return 0;
     }
 
-    // if the purchase date is in the future block all the tokens
-    if (lockState.unlockStart > now) {
-      return lockState.amount;
+    for (i=0; i<lockState.tokenLocks.length; i++) {
+      a = lockState.tokenLocks[i].amount;
+      t = lockState.tokenLocks[i].time;
+
+      if (t > now) {
+        lockSum = lockSum.add(a);
+      }
     }
 
-    // uint256 s = (now - unlock_start_dates[_addr]) / unlock_step_time[_addr] + 1; // unlock from start step
-    uint256 s = ((now.sub(lockState.unlockStart)).div(lockState.stepTime)).add(1);
-    if (s >= lockState.step) {
-      return 0x0;
-    }
-
-    // uint256 min_tokens = (unlock_steps[_addr] - s)*locked_amounts[_addr] / unlock_steps[_addr];
-    uint256 minTokens = ((lockState.step.sub(s)).mul(lockState.amount)).div(lockState.step);
-
-    return minTokens;
+    return lockSum;
   }
 
-  function setTokenLockPolicy(address _addr, uint256 _value, uint256 _start_time, uint256 _step_time, uint256 _unlock_step) onlyOwnerOrAdmin public {
+  function addTokenLock(address _addr, uint256 _value, uint256 _release_time) onlyOwnerOrAdmin public {
     require(_addr != address(0));
+    require(_value > 0);
+    require(_release_time > now);
 
     TokenLockState storage lockState = lockingStates[_addr]; // assigns a pointer. change the member value will update struct itself.
+    if (_release_time > lockState.latestReleaseTime) {
+      lockState.latestReleaseTime = _release_time;
+    }
+    lockState.tokenLocks.push(TokenLockInfo(_value, _release_time));
 
-    lockState.unlockStart = _start_time;
-    lockState.stepTime = _step_time;
-    lockState.step = _unlock_step;
-    uint256 final_value = lockState.amount.add(_value);
-    lockState.amount = final_value;
-
-    emit UpdateTokenLockState(_addr, _start_time, _step_time, _unlock_step, final_value);
+    emit AddTokenLock(_addr, _release_time, _value);
   }
 }
 

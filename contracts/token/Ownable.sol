@@ -24,7 +24,7 @@ contract Ownable {
   }
 
   modifier onlyOwnerOrAdmin() {
-    require(msg.sender == owner || msg.sender == admin);
+    require(msg.sender != address(0) && (msg.sender == owner || msg.sender == admin));
     _;
   }
 
@@ -35,6 +35,7 @@ contract Ownable {
   function transferOwnership(address newOwner) onlyOwner public {
     require(newOwner != address(0));
     require(newOwner != owner);
+    require(newOwner != admin);
 
     emit OwnershipTransferred(owner, newOwner);
     owner = newOwner;
