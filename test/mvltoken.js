@@ -313,7 +313,6 @@ contract('MVLToken', (accounts) => {
     });
   });
 
-
   describe("bonus lock", () => {
     /*********************/
     /* Bonus lock test 1 */
@@ -321,18 +320,31 @@ contract('MVLToken', (accounts) => {
     it("should setup the lock policy", async () => {
       // for each month, 25% vesting
       const beneficiary = accounts[3];
-      const lockAmount = web3.toWei(100, 'ether'); // 100 MVL (1e20)
-      const startTime = moment.parseZone('2018-07-01T00:00:00+00:00').unix();
-      const stepTime = moment.duration(1, 'month')/1000; // in sec
-      const unlockStep = 4;
-      await token.setTokenLockPolicy(beneficiary, lockAmount, startTime, stepTime, unlockStep, {from: accounts[0]});
+
+      // const lockAmount = web3.toWei(100, 'ether'); // 100 MVL (1e20)
+      // const startTime = moment.parseZone('2018-07-01T00:00:00+00:00').unix();
+      // const stepTime = moment.duration(1, 'month')/1000; // in sec
+      // const unlockStep = 4;
+      // await token.setTokenLockPolicy(beneficiary, lockAmount, startTime, stepTime, unlockStep, {from: accounts[0]});
+      await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-07-01T00:00:00+00:00').unix());
+      await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-07-31T00:00:00+00:00').unix());
+      await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-08-30T00:00:00+00:00').unix());
+      await token.addTokenLock(beneficiary, web3.toWei(25, 'ether'), moment.parseZone('2018-09-29T00:00:00+00:00').unix());
+
+      const locked = await token.getMinLockedAmount(beneficiary);
+      locked.equals(web3.toBigNumber(100e18)).should.be.true;
 
       // time warp after release date
       await proceedTime(moment.parseZone('2018-06-01T01:00:00+00:00'));
+
     });
 
     it("cannot set the lock for 0 addr", async () => {
-      await token.setTokenLockPolicy(0x0, 1, 1, 100, 3, {from: accounts[0]}).should.be.rejectedWith(Error);
+      await token.addTokenLock(0x0, 25, moment.parseZone('2018-07-01T00:00:00+00:00').unix(), {from: accounts[0]}).should.be.rejectedWith(Error);
+    });
+
+    it("block set token lock policy for unauthorized user", async () => {
+      await token.addTokenLock(accounts[5], 25, moment.parseZone('2018-07-01T00:00:00+00:00').unix(), {from: accounts[3]}).should.be.rejectedWith(Error);
     });
 
     it("should not be able to transfer token including bonus", async () => {
@@ -510,10 +522,11 @@ contract('MVLToken', (accounts) => {
     it("should setup the different bonus policy", async () => {
       const beneficiary = accounts[4];
       const lockAmount = web3.toWei(100, 'ether'); // 100 MVL (1e20)
-      const startTime = moment.parseZone('2018-10-01T00:00:00+00:00').unix();
-      const stepTime = moment.duration(3, 'month')/1000; // in sec
-      const unlockStep = 1;
-      await token.setTokenLockPolicy(beneficiary, lockAmount, startTime, stepTime, unlockStep, {from: accounts[0]});
+      // const startTime = moment.parseZone('2018-10-01T00:00:00+00:00').unix();
+      // const stepTime = moment.duration(3, 'month')/1000; // in sec
+      // const unlockStep = 1;
+      // await token.setTokenLockPolicy(beneficiary, lockAmount, startTime, stepTime, unlockStep, {from: accounts[0]});
+      await token.addTokenLock(beneficiary, lockAmount, moment.parseZone('2018-10-01T00:00:00+00:00').add(moment.duration(3, 'month')/1000, 'seconds').unix());
     });
 
     it("should not be able to transfer locked amount before release date", async () => {
@@ -554,6 +567,40 @@ contract('MVLToken', (accounts) => {
 
       balance1.equals(web3.toBigNumber(0)).should.be.true;
       balance2.equals(web3.toBigNumber(200e18)).should.be.true;
+    });
+
+    it("lock 100 tokens", async () => {
+      const from = await token.owner();
+      const b = accounts[4];
+      await token.transfer(b, web3.toWei(100, 'ether'), {from});
+      // token.setTokenLockPolicy(b, web3.toWei(100, 'ether'), m.unix(), 86400, 3);
+      await token.addTokenLock(b, web3.toWei(33, 'ether'), moment.parseZone('2019-01-01T00:00:00+09:00').unix());
+      await token.addTokenLock(b, web3.toWei(33, 'ether'), moment.parseZone('2019-01-02T00:00:00+09:00').unix());
+      await token.addTokenLock(b, web3.toWei(34, 'ether'), moment.parseZone('2019-01-03T00:00:00+09:00').unix());
+      const a = await token.getMinLockedAmount(accounts[4]);
+      console.log('minlocked', a.toString());
+      a.equals(web3.toBigNumber(web3.toWei(100, 'ether'))).should.be.true;
+    });
+
+    it("should unlock 33 tokens after 1day", async () => {
+      await proceedTime(moment.parseZone('2019-01-01T00:00:01+09:00'));
+      const a = await token.getMinLockedAmount(accounts[4]);
+      console.log('minlocked', a.toString());
+      a.equals(web3.toBigNumber(web3.toWei(67, 'ether'))).should.be.true;
+    });
+
+    it("should unlock 33 tokens after 2day", async () => {
+      await proceedTime(moment.parseZone('2019-01-02T00:00:01+09:00'));
+      const a = await token.getMinLockedAmount(accounts[4]);
+      console.log('minlocked', a.toString());
+      a.equals(web3.toWei(34, 'ether')).should.be.true;
+    });
+
+    it("should unlock all tokens after 3day", async () => {
+      await proceedTime(moment.parseZone('2019-01-03T00:00:01+09:00'));
+      const a = await token.getMinLockedAmount(accounts[4]);
+      console.log('minlocked', a.toString());
+      a.equals(web3.toBigNumber(0)).should.be.true;
     });
   });
 
@@ -688,6 +735,56 @@ contract('MVLToken', (accounts) => {
     });
   });
 
+  describe("admin setup", () => {
+    /***************/
+    /* setup admin */
+    /***************/
+    it("setup admin", async () => {
+      const admin = accounts[9];
+      const owner = await token.owner();
+      await token.setAdmin(admin, {from: owner});
+
+      const newAdmin = await token.admin();
+      newAdmin.should.equal(admin);
+
+      // get approved amount
+      const allowance = await token.allowance(owner, admin);
+      // all amount should be allowed
+      allowance.equals(web3.toBigNumber(3e28)).should.be.true;
+    });
+
+    it("change admin", async () => {
+      const admin = accounts[8];
+      const oldAdmin = await token.admin();
+      const owner = await token.owner();
+      await token.setAdmin(admin, {from: owner});
+
+      const newAdmin = await token.admin();
+      newAdmin.should.equal(admin);
+
+      // get approved amount
+      const allowance = await token.allowance(owner, admin);
+      // all amount should be allowed
+      allowance.equals(web3.toBigNumber(3e28)).should.be.true;
+      // old admin is not allowed
+      const allowance2 = await token.allowance(owner, oldAdmin);
+      allowance2.equals(web3.toBigNumber(0)).should.be.true;
+    });
+
+    it("block change admin to the same one", async () => {
+      const admin = await token.admin();
+      const from = await token.owner();
+      await token.setAdmin(admin, {from}).should.be.rejectedWith(Error);
+    });
+
+    it("block change admin to owner", async () => {
+      const admin = await token.owner();
+      const from = await token.owner();
+      await token.setAdmin(admin, {from}).should.be.rejectedWith(Error);
+    });
+
+  });
+
   describe("misc", () => {
     /*******************************/
     /* default payable revert test */
@@ -714,8 +811,9 @@ contract('MVLToken', (accounts) => {
       const balance = await token.balanceOf(account);
 
       // lock all balance
-      const d = await token.DISTRIBUTE_DATE();
-      await token.setTokenLockPolicy(account, balance, d.add(web3.toBigNumber(365*86400*1000)), 365*86400*1000, 10); // 10 yrs, 1 year interval
+      // const d = await token.DISTRIBUTE_DATE();
+      // await token.setTokenLockPolicy(account, balance, d.add(web3.toBigNumber(365*86400*1000)), 365*86400*1000, 10); // 10 yrs, 1 year interval
+      await token.addTokenLock(account, balance, moment.parseZone('2028-01-01T00:00:00+00:00').unix());
       const locked = await token.getMinLockedAmount(account);
       locked.equals(balance).should.be.true;
 
