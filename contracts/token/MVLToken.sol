@@ -124,7 +124,7 @@ contract TokenLock is Ownable {
   }
 
   // calculate the amount of tokens an address can use
-  function getMinLockedAmount(address _addr) view public returns (uint256) {
+  function getMinLockedAmount(address _addr) view public returns (uint256 locked) {
     uint256 i;
     uint256 a;
     uint256 t;
@@ -181,6 +181,7 @@ contract MVLToken is BurnableToken, DetailedERC20, ERC20Token, TokenLock {
 
     // initial supply belongs to owner
     balances[owner] = _totalSupply;
+    emit Transfer(address(0x0), msg.sender, _totalSupply);
   }
 
   // modifiers
@@ -216,7 +217,7 @@ contract MVLToken is BurnableToken, DetailedERC20, ERC20Token, TokenLock {
   }
 
   function canTransferBefore(address _sender) public view returns(bool) {
-    return _sender == owner || _sender == admin;
+    return _sender != address(0) && (_sender == owner || _sender == admin);
   }
 
   function canTransferIfLocked(address _sender, uint256 _value) public view returns(bool) {
